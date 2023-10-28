@@ -1627,7 +1627,7 @@ class MailThread(models.AbstractModel):
         if partner and partner.email:  # complete profile: id, name <email>
             result[self.ids[0]].append((partner.id, partner.email_formatted, lang, reason))
         elif partner:  # incomplete profile: id, name
-            result[self.ids[0]].append((partner.id, partner.name, lang, reason))
+            result[self.ids[0]].append((partner.id, partner.name or '', lang, reason))
         else:  # unknown partner, we are probably managing an email address
             result[self.ids[0]].append((False, partner_info.get('full_name') or email, lang, reason))
         return result
@@ -1933,7 +1933,7 @@ class MailThread(models.AbstractModel):
                         node.set('src', '/web/image/%s?access_token=%s' % attachment_data)
                         postprocessed = True
                 if postprocessed:
-                    return_values['body'] = lxml.html.tostring(root, pretty_print=False, encoding='UTF-8')
+                    return_values['body'] = lxml.html.tostring(root, pretty_print=False, encoding='unicode')
         return_values['attachment_ids'] = m2m_attachment_ids
         return return_values
 

@@ -6,16 +6,26 @@ import { Dialog } from "@web/core/dialog/dialog";
 import { _lt } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
 import { useChildRef, useOwnedDialogs, useService } from "@web/core/utils/hooks";
-import { sprintf } from "@web/core/utils/strings";
+import { escape, sprintf } from "@web/core/utils/strings";
 import { Many2XAutocomplete, useOpenMany2XRecord } from "@web/views/fields/relational_utils";
 import * as BarcodeScanner from "@web/webclient/barcode/barcode_scanner";
 import { standardFieldProps } from "../standard_field_props";
 
-import { Component, onWillUpdateProps, useState } from "@odoo/owl";
+import { Component, onWillUpdateProps, useState, markup } from "@odoo/owl";
 
 class CreateConfirmationDialog extends Component {
     get title() {
         return sprintf(this.env._t("New: %s"), this.props.name);
+    }
+
+    get dialogContent() {
+        return markup(
+            sprintf(
+                this.env._t("Create <strong>%s</strong> as a new %s?"),
+                escape(this.props.value),
+                escape(this.props.name)
+            )
+        );
     }
 
     async onCreate() {
@@ -296,7 +306,7 @@ Many2OneField.supportedTypes = ["many2one"];
 Many2OneField.extractProps = ({ attrs, field }) => {
     const noOpen = Boolean(attrs.options.no_open);
     const noCreate = Boolean(attrs.options.no_create);
-    const canCreate = attrs.can_create && Boolean(JSON.parse(attrs.can_create)) && !noCreate;
+    const canCreate = noCreate ? false : attrs.can_create && Boolean(JSON.parse(attrs.can_create));
     const canWrite = attrs.can_write && Boolean(JSON.parse(attrs.can_write));
     const noQuickCreate = Boolean(attrs.options.no_quick_create);
     const noCreateEdit = Boolean(attrs.options.no_create_edit);

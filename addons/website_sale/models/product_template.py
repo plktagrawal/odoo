@@ -38,7 +38,7 @@ class ProductTemplate(models.Model):
     website_size_y = fields.Integer('Size Y', default=1)
     website_ribbon_id = fields.Many2one('product.ribbon', string='Ribbon')
     website_sequence = fields.Integer('Website Sequence', help="Determine the display order in the Website E-commerce",
-                                      default=lambda self: self._default_website_sequence(), copy=False)
+                                      default=lambda self: self._default_website_sequence(), copy=False, index=True)
     public_categ_ids = fields.Many2many(
         'product.public.category', relation='product_public_category_product_template_rel',
         string='Website Product Category',
@@ -104,6 +104,8 @@ class ProductTemplate(models.Model):
 
     def _get_website_accessory_product(self):
         domain = self.env['website'].sale_product_domain()
+        if not self.env.user._is_internal():
+            domain = expression.AND([domain, [('is_published', '=', True)]])
         return self.accessory_product_ids.filtered_domain(domain)
 
     def _get_website_alternative_product(self):

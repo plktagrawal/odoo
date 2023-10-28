@@ -5881,6 +5881,7 @@ QUnit.module("Views", (hooks) => {
         );
 
         await editInput(target, ".o_field_widget[name=int_field] input", 64);
+        await nextTick();
 
         assert.containsOnce(document.body, ".modal");
         assert.strictEqual(
@@ -11097,8 +11098,7 @@ QUnit.module("Views", (hooks) => {
 
             await click(target.querySelector(".o_form_view .o_content button.btn-primary"));
             assert.verifySteps(["doActionButton"]);
-            await click(target.querySelector(".o_form_view button.mybutton"));
-            assert.verifySteps([]);
+            assert.ok(target.querySelector(".o_form_view button.mybutton").disabled);
         }
     );
 
@@ -12424,6 +12424,7 @@ QUnit.module("Views", (hooks) => {
         });
 
         await click(target, "button[name=do_it]");
+        await nextTick();
         assert.containsNone(target, ".o_form_error_dialog");
         assert.containsOnce(target, ".modal");
         assert.strictEqual(
@@ -12831,6 +12832,44 @@ QUnit.module("Views", (hooks) => {
         assert.strictEqual(
             JSON.parse(target.querySelector(".o_field_widget").dataset.tooltipInfo).field.help,
             "xmlHelp"
+        );
+    });
+
+    QUnit.test("help on field is shown without debug mode -- form", async (assert) => {
+        serverData.models.partner.fields.bar.help = "bar tooltip";
+
+        patchWithCleanup(browser, {
+            setTimeout: (fn) => fn(),
+            clearTimeout: () => { },
+        });
+
+        await makeView({
+            type: "form",
+            resModel: "partner",
+            serverData,
+            arch: `
+                <form>
+                    <group>
+                        <label for="foo"/>
+                        <div><field name="foo" help="foo xml tooltip"/></div>
+                        <label for="bar"/>
+                        <div><field name="bar" help="bar xml tooltip"/></div>
+                    </group>
+                </form>`,
+        });
+
+        await mouseEnter(target.querySelector(".o_form_label[for=foo] sup"));
+        await nextTick();
+        assert.strictEqual(
+            target.querySelector(".o-tooltip .o-tooltip--help").textContent,
+            "foo xml tooltip"
+        );
+
+        await mouseEnter(target.querySelector(".o_form_label[for=bar] sup"));
+        await nextTick();
+        assert.strictEqual(
+            target.querySelector(".o-tooltip .o-tooltip--help").textContent,
+            "bar xml tooltip"
         );
     });
 
@@ -13416,5 +13455,74 @@ QUnit.module("Views", (hooks) => {
         assert.equal(group.clientWidth, group.scrollWidth);
         table.style.tableLayout = "auto";
         assert.ok(group.clientWidth < group.scrollWidth);
+    });
+
+    QUnit.test("reload records in the context of the form to avoid having partial field values", async function (assert) {
+        serverData.actions = {
+            1: {
+                id: 1,
+                name: "Partner",
+                res_model: "partner",
+                type: "ir.actions.act_window",
+                views: [[false, "form"]],
+                view_mode: "form",
+                res_id: 6,
+                target: "new"
+            },
+        };
+
+        serverData.views = {
+            "partner,false,form": `<form>
+                <field name="display_name"/>
+                <field name="timmy" widget="many2many_tags" options="{'color_field': 'color'}"/>
+            </form>`,
+        };
+
+        await makeView({
+            type: "form",
+            resModel: "user",
+            resId: 19,
+            serverData,
+            arch: `
+            <form>
+                <field name="partner_ids">
+                    <tree>
+                        <field name="display_name"/>
+                    </tree>
+                    <form>
+                        <header>
+                            <button type="action" name="1" string="test"/>
+                        </header>
+                        <field name="display_name"/>
+                        <field name="timmy" widget="many2many_tags" options="{'color_field': 'color'}"/>
+                    </form>
+                </field>
+            </form>`,
+            mockRPC: (route, { method, args }) => {
+                if (method === 'create') {
+                    assert.step(method);
+                    assert.deepEqual(args[0], {
+                        display_name: false,
+                        timmy: [
+                            [
+                                6,
+                                false,
+                                [12]
+                            ],
+                        ],
+                    });
+                } else if (route === '/web/action/load') {
+                    assert.step("action");
+                }
+            },
+        });
+
+        await click(target.querySelector(".o_field_x2many_list_row_add a"));
+        await selectDropdownItem(target, "timmy", "gold");
+        await click(target, ".modal-dialog .o_form_button_save");
+        await click(target.querySelector(".o_data_cell"));
+        await click(target, "[name='1']");
+        assert.deepEqual(target.querySelector(".o_tag_badge_text").innerHTML, 'gold');
+        assert.verifySteps(['create', 'action'], 'Verify that create is called before action load');
     });
 });

@@ -195,11 +195,17 @@ odoo.define('point_of_sale.PaymentScreen', function (require) {
             }
 
             this.currentOrder.initialize_validation_date();
+            for (let line of this.paymentLines) {
+                if (!line.amount === 0) {
+                     this.currentOrder.remove_paymentline(line);
+                }
+            }
             this.currentOrder.finalized = true;
 
             let syncOrderResult, hasError;
 
             try {
+                this.env.services.ui.block()
                 // 1. Save order to server.
                 syncOrderResult = await this.env.pos.push_single_order(this.currentOrder);
 
@@ -251,6 +257,7 @@ odoo.define('point_of_sale.PaymentScreen', function (require) {
                     }
                 }
             } finally {
+                this.env.services.ui.unblock()
                 // Always show the next screen regardless of error since pos has to
                 // continue working even offline.
                 this.showScreen(this.nextScreen);

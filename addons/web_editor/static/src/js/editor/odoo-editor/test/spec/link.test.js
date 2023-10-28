@@ -105,13 +105,13 @@ describe('Link', () => {
         testUrlRegex('google.com/foo/?data=hello&data2=foo#anchor', { expectedUrl: 'google.com/foo/?data=hello&data2=foo#anchor' });
     });
     describe('insert Link', () => {
-        // This fails, but why would the cursor stay inside the link
-        // if the next text insert should be outside of the link (see next test)
         describe('range collapsed', () => {
             it('should insert a link and preserve spacing', async () => {
                 await testEditor(BasicEditor, {
                     contentBefore: '<p>a [] c</p>',
                     stepFunction: createLink,
+                    // Two consecutive spaces like one so `a [] c` is
+                    // effectively the same as `a []c`.
                     contentAfter: '<p>a <a href="#">link</a>[]c</p>',
                 });
             });
@@ -272,6 +272,45 @@ describe('Link', () => {
                         await insertText(editor, 'o');
                     },
                     contentAfter: '<p>a<a href="http://google.com">http://goo[]gle.com</a>b</p>',
+                });
+                await testEditor(BasicEditor, {
+                    contentBefore: '<p>a<a href="mailto:hello@moto.com">hello@moto[].com</a></p>',
+                    stepFunction: async editor => {
+                        await insertText(editor, 'r');
+                    },
+                    contentAfter: '<p>a<a href="mailto:hello@motor.com">hello@motor[].com</a></p>',
+                });
+            });
+            it('should change the url when the label change, without changing the protocol', async () => {
+                await testEditor(BasicEditor, {
+                    contentBefore: '<p>a<a href="http://google.co">google.co[]</a>b</p>',
+                    stepFunction: async editor => {
+                        await insertText(editor, 'm');
+                    },
+                    contentAfter: '<p>a<a href="http://google.com">google.com[]</a>b</p>',
+                });
+                await testEditor(BasicEditor, {
+                    contentBefore: '<p>a<a href="https://google.co">google.co[]</a>b</p>',
+                    stepFunction: async editor => {
+                        await insertText(editor, 'm');
+                    },
+                    contentAfter: '<p>a<a href="https://google.com">google.com[]</a>b</p>',
+                });
+            });
+            it('should change the url when the label change, changing to the suitable protocol', async () => {
+                await testEditor(BasicEditor, {
+                    contentBefore: '<p>a<a href="http://hellomoto.com">hello[]moto.com</a></p>',
+                    stepFunction: async editor => {
+                        await insertText(editor, '@');
+                    },
+                    contentAfter: '<p>a<a href="mailto:hello@moto.com">hello@[]moto.com</a></p>',
+                });
+                await testEditor(BasicEditor, {
+                    contentBefore: '<p>a<a href="mailto:hello@moto.com">hello@[]moto.com</a></p>',
+                    stepFunction: async editor => {
+                        await deleteBackward(editor);
+                    },
+                    contentAfter: '<p>a<a href="https://hellomoto.com">hello[]moto.com</a></p>',
                 });
             });
             it('should change the url in one step', async () => {

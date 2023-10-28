@@ -375,6 +375,9 @@ class StockMove(models.Model):
                     continue
                 ml.qty_done -= qty_ml_dec
                 quantity -= move.product_uom._compute_quantity(qty_ml_dec, move.product_uom, round=False)
+                if not ml.exists():
+                    # If decreasing the move line qty_done to 0 let it to be unlinked (i.e. for immediate transfers)
+                    continue
                 # Unreserve
                 if (not move.picking_id.immediate_transfer and move.reserved_availability < move.product_uom_qty):
                     continue
@@ -971,7 +974,7 @@ Please change the quantity done or the rounding precision of your unit of measur
             for __, g in groupby(candidate_moves, key=itemgetter(*distinct_fields)):
                 moves = self.env['stock.move'].concat(*g)
                 # Merge all positive moves together
-                if len(moves) > 1:
+                if len(moves) > 1 and any(m in self for m in moves):
                     # link all move lines to record 0 (the one we will keep).
                     moves.mapped('move_line_ids').write({'move_id': moves[0].id})
                     # merge move data
@@ -979,8 +982,9 @@ Please change the quantity done or the rounding precision of your unit of measur
                     # update merged moves dicts
                     moves_to_unlink |= moves[1:]
                     merged_moves |= moves[0]
-                # Add the now single positive move to its limited key record
-                moves_by_neg_key[neg_key(moves[0])] |= moves[0]
+                    moves = moves[0]
+                for m in moves:
+                    moves_by_neg_key[neg_key(m)] |= m
 
         for neg_move in neg_qty_moves:
             # Check all the candidates that matches the same limited key, and adjust their quantities to absorb negative moves
@@ -1014,7 +1018,7 @@ Please change the quantity done or the rounding precision of your unit of measur
             moves_to_unlink.sudo().unlink()
 
         if moves_to_cancel:
-            moves_to_cancel._action_cancel()
+            moves_to_cancel.filtered(lambda m: float_is_zero(m.quantity_done, precision_rounding=m.product_uom.rounding))._action_cancel()
 
         return (self | merged_moves) - moves_to_unlink
 
